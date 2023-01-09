@@ -10,15 +10,17 @@ import tensorflow as tf
 from model_search import *
 from data_utils import read_data
 from datetime import datetime
+
+
 parser = argparse.ArgumentParser("cifar")
-parser.add_argument('--data', type=str, default='./data/cifar10', help='location of the data corpus')
-parser.add_argument('--batch_size', type=int, default=16, help='batch size')
+parser.add_argument('--data', type=str, default='../data/cifar-10-batches-py', help='location of the data corpus')
+parser.add_argument('--batch_size', type=int, default=512, help='batch size')
 parser.add_argument('--learning_rate', type=float, default=0.025, help='init learning rate')
 parser.add_argument('--learning_rate_min', type=float, default=0.001, help='min learning rate')
 parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
 parser.add_argument('--weight_decay', type=float, default=3e-4, help='weight decay')
 parser.add_argument('--report_freq', type=float, default=200, help='report frequency')
-parser.add_argument('--gpu', type=int, default=1, help='gpu device id')
+parser.add_argument('--gpu', type=int, default=4, help='gpu device id')
 parser.add_argument('--epochs', type=int, default=50, help='num of training epochs')
 parser.add_argument('--init_channels', type=int, default=16, help='num of init channels')
 parser.add_argument('--layers', type=int, default=8, help='total number of layers')
@@ -48,12 +50,12 @@ def main():
 
 	images, labels = read_data(args.data,args.train_portion)
 	train_dataset = tf.data.Dataset.from_tensor_slices((images["train"],labels["train"]))
-	train_dataset=train_dataset.map(_pre_process).shuffle(100).batch(args.batch_size)
+	train_dataset=train_dataset.map(_pre_process).shuffle(20000).batch(args.batch_size)
 	train_iter=train_dataset.make_initializable_iterator()
 	x_train,y_train=train_iter.get_next()
 
 	valid_dataset = tf.data.Dataset.from_tensor_slices((images["valid"],labels["valid"]))
-	valid_dataset=valid_dataset.shuffle(100).batch(args.batch_size)
+	valid_dataset=valid_dataset.shuffle(20000).batch(args.batch_size)
 	valid_iter=valid_dataset.make_initializable_iterator()
 	x_valid,y_valid=valid_iter.get_next()
 
@@ -98,6 +100,8 @@ def main():
 		top1 = utils.AvgrageMeter()
 		test_top1 = utils.AvgrageMeter()
 		sess.run([train_iter.initializer,valid_iter.initializer])
+		print('train start!')
+		cur = time.time()
 		while True:
 			try:
 				_,loss, acc,crrunt_lr,gs=sess.run([follower_opt,train_loss,accuracy,lr,global_step])
@@ -111,12 +115,15 @@ def main():
 				print('-'*80)
 				print("end of an epoch")
 				break
+		print('train end!: {}'.format(time.time() - cur))
 		genotype=get_genotype(sess)
 		print("genotype is {}".format(genotype))
 		genotype_record_file.write("{}".format(genotype)+'\n')
 
 		valid_top1 = utils.AvgrageMeter()
 		sess.run(valid_iter.initializer)
+		print('valid start!')
+		cur = time.time()
 		while True:
 			try:
 				valid_acc=sess.run(valid_accuracy)
@@ -127,6 +134,8 @@ def main():
 				print('-'*80)
 				print("end of an valid epoch")
 				break
+
+		print('valid end!: {}'.format(time.time()-cur))
 
 
 def compute_unrolled_step(x_train,y_train,x_valid,y_valid,w_var,train_loss,lr):
